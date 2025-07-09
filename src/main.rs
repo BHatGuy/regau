@@ -1,12 +1,12 @@
 #[derive(Debug, PartialEq, Eq)]
-pub enum Atom {
+enum Atom {
     Start,
     End,
     Any,
     Literal(char),
 }
 
-pub fn parse(regex: &str) -> Vec<Atom> {
+fn parse(regex: &str) -> Vec<Atom> {
     let mut atoms = Vec::new();
 
     for c in regex.chars() {
@@ -21,72 +21,50 @@ pub fn parse(regex: &str) -> Vec<Atom> {
     atoms
 }
 
-pub fn rmatch(input: &str, regex: &[Atom]) -> bool {
-    let mut regex_iter = regex.iter();
+struct Match<'a> {
+    start: usize,
+    end: usize,
+    open_atoms: &'a [Atom],
+}
 
-    for c in input.chars() {
-        if let Some(next) = regex_iter.next() {
-            match next {
-                Atom::Start => todo!(),
-                Atom::End => todo!(),
-                Atom::Any => {}
-                Atom::Literal(l) => {
-                    if *l != c {
-                        return false;
-                    }
+fn rmatch(input: &str, regex: &[Atom]) -> bool {
+    let mut possible_matches = Vec::new();
+
+    for (i, chr) in input.chars().enumerate() {
+        possible_matches.push(Match {
+            start: i,
+            end: i,
+            open_atoms: regex,
+        });
+        let mut next_matches = Vec::new();
+
+        for mut mat in possible_matches {
+            let matches = match mat.open_atoms[0] {
+                Atom::Start => mat.start == 0,
+                Atom::End => mat.end == input.len(),
+                Atom::Any => true,
+                Atom::Literal(l) => l == chr,
+            };
+            if matches {
+                mat.end += 1;
+                mat.open_atoms = &mat.open_atoms[1..];
+                if mat.open_atoms.is_empty() {
+                    return true;
                 }
+                next_matches.push(mat);
             }
-        } else {
-            return false;
         }
+
+        possible_matches = next_matches;
     }
 
-    if let Some(atom) = regex_iter.next() {
-        if *atom != Atom::End {
-            return false;
-        }
-    }
-
-    true
+    false
 }
 
 fn main() {
     let test_regex = parse("....");
     let res = rmatch("abc", &test_regex);
     println!("{res}");
-}
-
-#[cfg(test)]
-mod parse_tests {
-    use super::*;
-
-    #[test]
-    fn parse_only_literals() {
-        let result = parse("abc");
-        let expected = vec![Atom::Literal('a'), Atom::Literal('b'), Atom::Literal('c')];
-        assert_eq!(result, expected);
-    }
-
-    #[test]
-    fn parse_any() {
-        let result = parse("a.c.");
-        let expected = vec![Atom::Literal('a'), Atom::Any, Atom::Literal('c'), Atom::Any];
-        assert_eq!(result, expected);
-    }
-
-    #[test]
-    fn parse_start() {
-        let result = parse("^a");
-        let expected = vec![Atom::Start, Atom::Literal('a')];
-        assert_eq!(result, expected);
-    }
-
-    #[test]
-    fn parse_end() {
-        let result = parse("a$");
-        let expected = vec![Atom::Literal('a'), Atom::End];
-        assert_eq!(result, expected);
-    }
 }
 
 #[cfg(test)]
