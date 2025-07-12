@@ -1,12 +1,12 @@
-use crate::statemachines::StateMachine;
-
 mod regex;
-mod statemachines;
+
+use crate::regex::StateMachine;
 
 fn main() {
-    let atoms = regex::parse("^a.b.c$");
+    let reg = "^a.*b.c$";
+    let state_machine: StateMachine = reg.parse().unwrap();
 
-    let state_machine = StateMachine::from(atoms);
-
+    println!("{reg}");
     println!("{state_machine:?}");
+    println!("{}", state_machine.is_dfa());
 }

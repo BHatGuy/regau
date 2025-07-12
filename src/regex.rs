@@ -1,103 +1,109 @@
-use crate::statemachines::StateMachine;
+use std::{
+    collections::{HashMap, HashSet},
+    str::FromStr,
+};
 
-#[derive(Debug, PartialEq, Eq, Hash)]
-pub enum Atom {
-    Start,
-    End,
-    Any,
-    Literal(char),
+#[derive(Debug)]
+pub struct StateMachine {
+    transitions: HashSet<(u64, u64, char)>,
 }
 
-pub fn parse(regex: &str) -> Vec<Atom> {
-    let mut atoms = Vec::new();
-
-    for c in regex.chars() {
-        match c {
-            '^' => atoms.push(Atom::Start),
-            '$' => atoms.push(Atom::End),
-            '.' => atoms.push(Atom::Any),
-            _ => atoms.push(Atom::Literal(c)),
+impl StateMachine {
+    pub fn new() -> Self {
+        Self {
+            transitions: HashSet::new(),
         }
     }
 
-    atoms
+    pub fn add_transition(&mut self, from: u64, to: u64, input: char) {
+        self.transitions.insert((from, to, input));
+    }
+
+    pub fn is_dfa(&self) -> bool {
+        let mut states = HashSet::new();
+        for (from, to, _) in &self.transitions {
+            states.insert(*from);
+            states.insert(*to);
+        }
+
+        for state in states {
+            let mut uniq = HashSet::new();
+            let all_uniq = self
+                .transitions
+                .iter()
+                .filter(|(from, _, _)| *from == state)
+                .map(|(_, _, input)| *input)
+                .all(|x| uniq.insert(x));
+
+            let any_and_another = uniq.contains(&'.') && uniq.len() > 1;
+
+            if !all_uniq || any_and_another {
+                return false;
+            }
+        }
+
+        true
+    }
 }
 
-fn rmatch(input: &str, regex: &[Atom]) -> bool {
-    todo!();
-}
+impl FromStr for StateMachine {
+    type Err = String; // TODO: Own error type
 
-impl From<Vec<Atom>> for StateMachine<Atom> {
-    fn from(atoms: Vec<Atom>) -> Self {
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
         let mut state_machine = StateMachine::new();
         let mut state = 0;
-        for atom in atoms {
+        let mut last_literal = ' '; // TODO: Option
+        for chr in s.chars() {
+            if chr == '*' {
+                state_machine.add_transition(state, state, last_literal);
+                continue;
+            }
+
             let next_state = state + 1;
-            state_machine.add_transition(state, next_state, atom);
+            state_machine.add_transition(state, next_state, chr);
+            last_literal = chr;
             state = next_state;
         }
 
-        state_machine
+        Ok(state_machine)
     }
 }
 
 #[cfg(test)]
-mod parse_tests {
+mod tests {
     use super::*;
 
     #[test]
-    fn parse_only_literals() {
-        let result = parse("abc");
-        let expected = vec![Atom::Literal('a'), Atom::Literal('b'), Atom::Literal('c')];
-        assert_eq!(result, expected);
+    fn construct_dfa() {
+        let mut state_machine = StateMachine::new();
+
+        state_machine.add_transition(0, 1, 'a');
+        state_machine.add_transition(0, 1, 'x');
+        state_machine.add_transition(0, 2, 'c');
+        state_machine.add_transition(1, 2, 'b');
+
+        assert!(state_machine.is_dfa())
     }
 
     #[test]
-    fn parse_any() {
-        let result = parse("a.c.");
-        let expected = vec![Atom::Literal('a'), Atom::Any, Atom::Literal('c'), Atom::Any];
-        assert_eq!(result, expected);
+    fn construct_nfa() {
+        let mut state_machine = StateMachine::new();
+
+        state_machine.add_transition(0, 1, 'a');
+        state_machine.add_transition(0, 2, 'a');
+        state_machine.add_transition(1, 2, 'b');
+
+        assert!(!state_machine.is_dfa())
     }
 
     #[test]
-    fn parse_start() {
-        let result = parse("^a");
-        let expected = vec![Atom::Start, Atom::Literal('a')];
-        assert_eq!(result, expected);
-    }
+    fn construct_dfa_any() {
+        let mut state_machine = StateMachine::new();
 
-    #[test]
-    fn parse_end() {
-        let result = parse("a$");
-        let expected = vec![Atom::Literal('a'), Atom::End];
-        assert_eq!(result, expected);
-    }
-}
+        state_machine.add_transition(0, 1, 'a');
+        state_machine.add_transition(0, 1, '.');
+        state_machine.add_transition(1, 2, 'b');
 
-#[cfg(test)]
-mod match_tests {
-    use super::*;
-
-    #[test]
-    fn match_literals() {
-        let regex = parse("abcd");
-
-        assert!(rmatch("abcd", &regex));
-        assert!(rmatch("_abcd_", &regex));
-
-        assert!(!rmatch("_abc_", &regex));
-        assert!(!rmatch("abc", &regex));
-    }
-
-    #[test]
-    fn match_any() {
-        let regex = parse("a.c.");
-
-        assert!(rmatch("abcd", &regex));
-        assert!(rmatch("aacc", &regex));
-        assert!(rmatch("_aacc_", &regex));
-
-        assert!(!rmatch("abc", &regex));
-        assert!(!rmatch("_abc", &regex));
+        assert!(!state_machine.is_dfa())
     }
 }
