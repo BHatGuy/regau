@@ -1,12 +1,14 @@
-#[derive(Debug, PartialEq, Eq)]
-enum Atom {
+use crate::statemachines::StateMachine;
+
+#[derive(Debug, PartialEq, Eq, Hash)]
+pub enum Atom {
     Start,
     End,
     Any,
     Literal(char),
 }
 
-fn parse(regex: &str) -> Vec<Atom> {
+pub fn parse(regex: &str) -> Vec<Atom> {
     let mut atoms = Vec::new();
 
     for c in regex.chars() {
@@ -23,6 +25,20 @@ fn parse(regex: &str) -> Vec<Atom> {
 
 fn rmatch(input: &str, regex: &[Atom]) -> bool {
     todo!();
+}
+
+impl From<Vec<Atom>> for StateMachine<Atom> {
+    fn from(atoms: Vec<Atom>) -> Self {
+        let mut state_machine = StateMachine::new();
+        let mut state = 0;
+        for atom in atoms {
+            let next_state = state + 1;
+            state_machine.add_transition(state, next_state, atom);
+            state = next_state;
+        }
+
+        state_machine
+    }
 }
 
 #[cfg(test)]

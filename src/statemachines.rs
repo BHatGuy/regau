@@ -1,26 +1,30 @@
-use std::collections::{HashMap, HashSet};
+use std::{
+    collections::{HashMap, HashSet},
+    hash::Hash,
+};
 
-struct StateMachine {
-    transitions: HashSet<(u64, u64, char)>,
+#[derive(Debug)]
+pub struct StateMachine<T> {
+    transitions: HashSet<(u64, u64, T)>,
 }
 
-impl StateMachine {
-    fn new() -> Self {
+impl<T: Eq + Hash> StateMachine<T> {
+    pub fn new() -> Self {
         Self {
             transitions: HashSet::new(),
         }
     }
 
-    fn add_transition(&mut self, from: u64, to: u64, input: char) {
+    pub fn add_transition(&mut self, from: u64, to: u64, input: T) {
         self.transitions.insert((from, to, input));
     }
 
-    fn is_dfa(&self) -> bool {
+    pub fn is_dfa(&self) -> bool {
         self.transitions
             .iter()
             .fold(HashMap::new(), |mut acc, (from, _, input)| {
                 acc.entry((from, input))
-                    .and_modify(|c| *c = *c + 1)
+                    .and_modify(|c| *c += 1)
                     .or_insert(1);
                 acc
             })
