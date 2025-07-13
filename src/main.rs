@@ -3,10 +3,13 @@ mod regex;
 use crate::regex::StateMachine;
 
 fn main() {
-    let reg = "^a.*b.c$";
+    let reg = "a.*c";
     let state_machine: StateMachine = reg.parse().unwrap();
 
+    let dfa = state_machine.to_dfa();
+    let res = state_machine.matches("accscccc");
+
     println!("{reg}");
-    println!("{state_machine:?}");
-    println!("{}", state_machine.is_dfa());
+    println!("{res}");
+    println!("{dfa:?}");
 }
