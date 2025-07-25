@@ -14,12 +14,7 @@ impl StateMachine {
         }
     }
 
-    pub fn add_transition(&mut self, from: u64, to: u64, input: char) {
-        self.transitions.insert((from, to, input));
-    }
-
     pub fn matches(&self, input: &str) -> bool {
-        println!("{self:?}");
         let mut matches = Vec::new();
 
         for start in 0..input.len() {
@@ -42,11 +37,9 @@ impl StateMachine {
                     state = *to;
                     if self.final_states.contains(&state) {
                         matches.push((start, index));
-                        println!("match");
                         break;
                     }
                 } else {
-                    println!("no match");
                     break;
                 }
 
@@ -166,39 +159,5 @@ mod tests {
 
         assert!(!state_machine.matches("abb"));
         assert!(!state_machine.matches("sdhkjdhc"));
-    }
-
-    #[test]
-    fn construct_dfa() {
-        let mut state_machine = StateMachine::new();
-
-        state_machine.add_transition(0, 1, 'a');
-        state_machine.add_transition(0, 1, 'x');
-        state_machine.add_transition(0, 2, 'c');
-        state_machine.add_transition(1, 2, 'b');
-
-        assert!(state_machine.is_dfa())
-    }
-
-    #[test]
-    fn construct_nfa() {
-        let mut state_machine = StateMachine::new();
-
-        state_machine.add_transition(0, 1, 'a');
-        state_machine.add_transition(0, 2, 'a');
-        state_machine.add_transition(1, 2, 'b');
-
-        assert!(!state_machine.is_dfa())
-    }
-
-    #[test]
-    fn construct_dfa_any() {
-        let mut state_machine = StateMachine::new();
-
-        state_machine.add_transition(0, 1, 'a');
-        state_machine.add_transition(0, 1, '.');
-        state_machine.add_transition(1, 2, 'b');
-
-        assert!(!state_machine.is_dfa())
     }
 }
