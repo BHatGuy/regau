@@ -2,8 +2,8 @@ use std::{collections::HashSet, str::FromStr};
 
 #[derive(Debug, PartialEq, Eq)]
 pub struct StateMachine {
-    transitions: HashSet<(u64, u64, char)>,
-    final_states: Vec<u64>,
+    transitions: HashSet<(Vec<u64>, Vec<u64>, char)>,
+    final_states: Vec<Vec<u64>>,
 }
 
 impl StateMachine {
@@ -18,7 +18,7 @@ impl StateMachine {
         let mut matches = Vec::new();
 
         for start in 0..input.len() {
-            let mut state = 0;
+            let mut state = vec![0];
             let mut index = start;
             loop {
                 let c = input.chars().nth(index);
@@ -26,15 +26,13 @@ impl StateMachine {
                     break;
                 }
                 let c = c.unwrap();
-                println!("{state} {index} {c}");
 
-                if let Some((from, to, _)) = self
+                if let Some((_, to, _)) = self
                     .transitions
                     .iter()
                     .find(|(from, _, input)| *from == state && (*input == c || *input == '.'))
                 {
-                    println!("{from} -> {to}");
-                    state = *to;
+                    state = to.clone();
                     if self.final_states.contains(&state) {
                         matches.push((start, index));
                         break;
@@ -64,8 +62,8 @@ impl StateMachine {
     pub fn is_dfa(&self) -> bool {
         let mut states = HashSet::new();
         for (from, to, _) in &self.transitions {
-            states.insert(*from);
-            states.insert(*to);
+            states.insert(from.clone());
+            states.insert(to.clone());
         }
 
         for state in states {
@@ -93,21 +91,27 @@ impl FromStr for StateMachine {
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         let mut state_machine = StateMachine::new();
-        let mut state = 0;
-        let mut last_transition = (0, 0, ' '); // TODO: Option
+        let mut state = vec![0];
+        let mut last_transition = (vec![0], vec![0], ' '); // TODO: Option
         for chr in s.chars() {
             if chr == '*' {
                 state_machine.transitions.remove(&last_transition);
 
-                last_transition = (last_transition.0, last_transition.0, last_transition.2);
-                state_machine.transitions.insert(last_transition);
-                state -= 1;
+                last_transition = (
+                    last_transition.0.clone(),
+                    last_transition.0,
+                    last_transition.2,
+                );
+                state_machine.transitions.insert(last_transition.clone());
+                state[0] -= 1;
                 continue;
             }
 
-            let next_state = state + 1;
-            last_transition = (state, next_state, chr);
-            state_machine.transitions.insert(last_transition);
+            let mut next_state = state.clone();
+            next_state[0] += 1;
+
+            last_transition = (state, next_state.clone(), chr);
+            state_machine.transitions.insert(last_transition.clone());
             state = next_state;
         }
         state_machine.final_states.push(state);
