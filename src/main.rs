@@ -12,4 +12,6 @@ fn main() {
     println!("{reg}");
     println!("{res}");
     println!("{dfa:?}");
+    let test = dfa.is_dfa();
+    println!("{test}");
 }

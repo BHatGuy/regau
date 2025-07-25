@@ -1,4 +1,7 @@
-use std::{collections::HashSet, str::FromStr};
+use std::{
+    collections::{HashMap, HashSet},
+    str::FromStr,
+};
 
 #[derive(Debug, PartialEq, Eq)]
 pub struct StateMachine {
@@ -56,7 +59,67 @@ impl StateMachine {
             };
         }
 
-        todo!()
+        let mut states_to_handle = vec![vec![0]];
+        let mut dfa = StateMachine::new();
+
+        while let Some(state) = states_to_handle.pop() {
+            let mut destinations: HashMap<char, Vec<u64>> = HashMap::new();
+            for sub_state in state.iter() {
+                for (_, to, input) in self
+                    .transitions
+                    .iter()
+                    .filter(|(from, _, _)| from.contains(sub_state))
+                {
+                    destinations
+                        .entry(*input)
+                        .and_modify(|x| x.append(&mut to.clone()))
+                        .or_insert(to.clone());
+                }
+            }
+
+            if let Some(any_to) = destinations.get(&'.') {
+                let mut any_to = any_to.clone();
+                for (input, to) in destinations.iter_mut() {
+                    if *input == '.' {
+                        continue;
+                    }
+
+                    to.append(&mut any_to);
+                }
+            }
+            destinations.remove(&'.');
+
+            for (input, mut to) in destinations {
+                if dfa.transitions.iter().filter(|(_, t, _)| *t == to).count() == 0 {
+                    let mut t = to.clone();
+                    t.sort();
+                    states_to_handle.push(t);
+                }
+
+                let mut from = state.clone();
+                from.sort();
+                to.sort();
+                let t = (from, to, input);
+                dfa.transitions.insert(t);
+            }
+        }
+
+        let mut final_states = HashSet::new();
+        for (_, to, _) in dfa.transitions.iter() {
+            for orig_state in self.final_states.iter() {
+                for sub in to.iter() {
+                    if orig_state.contains(sub) {
+                        final_states.insert(to.clone());
+                    }
+                }
+            }
+        }
+
+        dfa.final_states = final_states.iter().cloned().collect();
+
+        assert!(dfa.is_dfa());
+
+        dfa
     }
 
     pub fn is_dfa(&self) -> bool {
@@ -155,6 +218,8 @@ mod tests {
     fn repeat_wildcard_matching() {
         let reg = "a.*c";
         let state_machine: StateMachine = reg.parse().unwrap();
+
+        println!("{state_machine:?}");
 
         assert!(state_machine.matches("ac"));
         assert!(state_machine.matches("apc"));
