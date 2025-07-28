@@ -166,6 +166,18 @@ impl StateMachine {
 
         true
     }
+
+    pub fn to_dot(&self) -> String {
+        let mut dot = "digraph graphname{\n".to_owned();
+
+        for (from, to, input) in &self.transitions {
+            dot += &format!("\"{from:?}\" -> \"{to:?}\" [ label=\"{input}\" ]\n");
+        }
+
+        dot += "}";
+
+        dot
+    }
 }
 
 impl FromStr for StateMachine {
