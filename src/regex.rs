@@ -18,6 +18,8 @@ impl StateMachine {
     }
 
     pub fn matches(&self, input: &str) -> bool {
+        assert!(self.is_dfa());
+
         let mut matches = Vec::new();
 
         for start in 0..input.len() {
@@ -30,11 +32,20 @@ impl StateMachine {
                 }
                 let c = c.unwrap();
 
-                if let Some((_, to, _)) = self
+                let exact = self
                     .transitions
                     .iter()
-                    .find(|(from, _, input)| *from == state && (*input == c || *input == '.'))
-                {
+                    .find(|(from, _, input)| *from == state && (*input == c));
+                let any = self
+                    .transitions
+                    .iter()
+                    .find(|(from, _, input)| *from == state && (*input == '.'));
+                let any_other = self
+                    .transitions
+                    .iter()
+                    .find(|(from, _, input)| *from == state && (*input == '¤'));
+
+                if let Some((_, to, _)) = exact.or(any).or(any_other) {
                     state = to.clone();
                     if self.final_states.contains(&state) {
                         matches.push((start, index));
@@ -60,9 +71,12 @@ impl StateMachine {
         }
 
         let mut states_to_handle = vec![vec![0]];
+        let mut handeled = HashSet::new();
         let mut dfa = StateMachine::new();
 
         while let Some(state) = states_to_handle.pop() {
+            handeled.insert(state.clone());
+
             let mut destinations: HashMap<char, Vec<u64>> = HashMap::new();
             for sub_state in state.iter() {
                 for (_, to, input) in self
@@ -78,27 +92,32 @@ impl StateMachine {
             }
 
             if let Some(any_to) = destinations.get(&'.') {
-                let mut any_to = any_to.clone();
+                let any_to = any_to.clone();
                 for (input, to) in destinations.iter_mut() {
                     if *input == '.' {
                         continue;
                     }
 
-                    to.append(&mut any_to);
+                    to.append(&mut any_to.clone());
                 }
+                destinations.insert('¤', any_to); // TODO use Enum for specials
             }
             destinations.remove(&'.');
 
-            for (input, mut to) in destinations {
-                if dfa.transitions.iter().filter(|(_, t, _)| *t == to).count() == 0 {
-                    let mut t = to.clone();
-                    t.sort();
-                    states_to_handle.push(t);
+            for (input, to) in destinations {
+                let mut to: Vec<u64> = to
+                    .iter()
+                    .cloned()
+                    .collect::<HashSet<u64>>()
+                    .into_iter()
+                    .collect();
+                to.sort();
+                if !handeled.contains(&to) {
+                    states_to_handle.push(to.clone());
                 }
 
                 let mut from = state.clone();
                 from.sort();
-                to.sort();
                 let t = (from, to, input);
                 dfa.transitions.insert(t);
             }
