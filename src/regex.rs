@@ -202,7 +202,7 @@ impl Display for Input {
         match self {
             Input::Start => write!(f, "^"),
             Input::End => write!(f, "$"),
-            Input::AnyOther => write!(f, "."),
+            Input::AnyOther => write!(f, "¤"),
             Input::Any => write!(f, "."),
             Input::Literal(l) => write!(f, "'{l}'"),
         }
@@ -216,6 +216,8 @@ impl FromStr for StateMachine {
         let mut state_machine = StateMachine::new();
         let mut state = vec![0];
         let mut last_transition = (vec![0], vec![0], Input::Any); // TODO: Option
+        let last_group_start_state = state.clone();
+
         for chr in s.chars() {
             if chr == '*' {
                 state_machine.transitions.remove(&last_transition);
@@ -230,8 +232,21 @@ impl FromStr for StateMachine {
                 continue;
             }
 
+            if chr == '|' {
+                state_machine.final_states.push(state);
+                state = last_group_start_state.clone();
+                continue;
+            }
+
             let mut next_state = state.clone();
             next_state[0] += 1;
+            while state_machine
+                .transitions
+                .iter()
+                .any(|(from, to, _)| *to == next_state || *from == next_state)
+            {
+                next_state[0] += 1;
+            }
 
             let input = match chr {
                 '^' => Input::Start,
@@ -285,8 +300,6 @@ mod tests {
         let reg = "a.*c";
         let state_machine: StateMachine = reg.parse().unwrap();
 
-        println!("{state_machine:?}");
-
         assert!(state_machine.matches("ac"));
         assert!(state_machine.matches("apc"));
         assert!(state_machine.matches("axyc"));
@@ -294,5 +307,33 @@ mod tests {
 
         assert!(!state_machine.matches("abb"));
         assert!(!state_machine.matches("sdhkjdhc"));
+    }
+
+    #[test]
+    fn single_option() {
+        let reg = "a.*b|cd";
+        let state_machine: StateMachine = reg.parse().unwrap();
+
+        assert!(state_machine.matches("_ab_"));
+        assert!(state_machine.matches("_aajsldkb_"));
+        assert!(state_machine.matches("_cd_"));
+        assert!(state_machine.matches("_abcd_"));
+
+        assert!(!state_machine.matches("bc"));
+        assert!(!state_machine.matches("cb"));
+    }
+
+    #[test]
+    fn multiple_option() {
+        let reg = "ab|cd|ef|gh";
+        let state_machine: StateMachine = reg.parse().unwrap();
+
+        assert!(state_machine.matches("_ab_"));
+        assert!(state_machine.matches("_cd"));
+        assert!(state_machine.matches("_ef"));
+        assert!(state_machine.matches("_gh"));
+
+        assert!(!state_machine.matches("ce"));
+        assert!(!state_machine.matches("ah"));
     }
 }
