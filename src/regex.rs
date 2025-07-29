@@ -1,11 +1,21 @@
 use std::{
     collections::{HashMap, HashSet},
+    fmt::Display,
     str::FromStr,
 };
 
+#[derive(Debug, PartialEq, Eq, Hash, Clone, Copy)]
+enum Input {
+    Start,
+    End,
+    AnyOther,
+    Any,
+    Literal(char),
+}
+
 #[derive(Debug, PartialEq, Eq)]
 pub struct StateMachine {
-    transitions: HashSet<(Vec<u64>, Vec<u64>, char)>,
+    transitions: HashSet<(Vec<u64>, Vec<u64>, Input)>,
     final_states: Vec<Vec<u64>>,
 }
 
@@ -32,18 +42,21 @@ impl StateMachine {
                 }
                 let c = c.unwrap();
 
-                let exact = self
-                    .transitions
-                    .iter()
-                    .find(|(from, _, input)| *from == state && (*input == c));
+                let exact = self.transitions.iter().find(|(from, _, input)| {
+                    *from == state
+                        && (match input {
+                            Input::Literal(l) => *l == c,
+                            _ => false,
+                        })
+                });
                 let any = self
                     .transitions
                     .iter()
-                    .find(|(from, _, input)| *from == state && (*input == '.'));
+                    .find(|(from, _, input)| *from == state && (*input == Input::Any));
                 let any_other = self
                     .transitions
                     .iter()
-                    .find(|(from, _, input)| *from == state && (*input == '¤'));
+                    .find(|(from, _, input)| *from == state && (*input == Input::AnyOther));
 
                 if let Some((_, to, _)) = exact.or(any).or(any_other) {
                     state = to.clone();
@@ -77,7 +90,7 @@ impl StateMachine {
         while let Some(state) = states_to_handle.pop() {
             handeled.insert(state.clone());
 
-            let mut destinations: HashMap<char, Vec<u64>> = HashMap::new();
+            let mut destinations: HashMap<Input, Vec<u64>> = HashMap::new();
             for sub_state in state.iter() {
                 for (_, to, input) in self
                     .transitions
@@ -91,18 +104,18 @@ impl StateMachine {
                 }
             }
 
-            if let Some(any_to) = destinations.get(&'.') {
+            if let Some(any_to) = destinations.get(&Input::Any) {
                 let any_to = any_to.clone();
                 for (input, to) in destinations.iter_mut() {
-                    if *input == '.' {
+                    if *input == Input::Any {
                         continue;
                     }
 
                     to.append(&mut any_to.clone());
                 }
-                destinations.insert('¤', any_to); // TODO use Enum for specials
+                destinations.insert(Input::AnyOther, any_to);
             }
-            destinations.remove(&'.');
+            destinations.remove(&Input::Any);
 
             for (input, to) in destinations {
                 let mut to: Vec<u64> = to
@@ -157,7 +170,7 @@ impl StateMachine {
                 .map(|(_, _, input)| *input)
                 .all(|x| uniq.insert(x));
 
-            let any_and_another = uniq.contains(&'.') && uniq.len() > 1;
+            let any_and_another = uniq.contains(&Input::Any) && uniq.len() > 1;
 
             if !all_uniq || any_and_another {
                 return false;
@@ -180,13 +193,25 @@ impl StateMachine {
     }
 }
 
+impl Display for Input {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Input::Start => write!(f, "^"),
+            Input::End => write!(f, "$"),
+            Input::AnyOther => write!(f, "."),
+            Input::Any => write!(f, "."),
+            Input::Literal(l) => write!(f, "'{l}'"),
+        }
+    }
+}
+
 impl FromStr for StateMachine {
     type Err = String; // TODO: Own error type
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         let mut state_machine = StateMachine::new();
         let mut state = vec![0];
-        let mut last_transition = (vec![0], vec![0], ' '); // TODO: Option
+        let mut last_transition = (vec![0], vec![0], Input::Any); // TODO: Option
         for chr in s.chars() {
             if chr == '*' {
                 state_machine.transitions.remove(&last_transition);
@@ -204,7 +229,13 @@ impl FromStr for StateMachine {
             let mut next_state = state.clone();
             next_state[0] += 1;
 
-            last_transition = (state, next_state.clone(), chr);
+            let input = match chr {
+                '^' => Input::Start,
+                '$' => Input::End,
+                '.' => Input::Any,
+                c => Input::Literal(c),
+            };
+            last_transition = (state, next_state.clone(), input);
             state_machine.transitions.insert(last_transition.clone());
             state = next_state;
         }
