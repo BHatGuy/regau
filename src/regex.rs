@@ -216,7 +216,9 @@ impl FromStr for StateMachine {
         let mut state_machine = StateMachine::new();
         let mut state = vec![0];
         let mut last_transition = (vec![0], vec![0], Input::Any); // TODO: Option
-        let last_group_start_state = state.clone();
+        let mut group_stack = vec![state.clone()];
+        let mut group_leaves = Vec::new();
+        let mut group_closed = false;
 
         for chr in s.chars() {
             if chr == '*' {
@@ -232,9 +234,21 @@ impl FromStr for StateMachine {
                 continue;
             }
 
+            if chr == '(' {
+                group_stack.push(state.clone());
+                continue;
+            }
+
+            if chr == ')' {
+                group_closed = true;
+                group_stack.pop();
+                continue;
+            }
+
             if chr == '|' {
-                state_machine.final_states.push(state);
-                state = last_group_start_state.clone();
+                group_closed = false;
+                group_leaves.push(state);
+                state = group_stack.last().unwrap().clone();
                 continue;
             }
 
@@ -256,9 +270,20 @@ impl FromStr for StateMachine {
             };
             last_transition = (state, next_state.clone(), input);
             state_machine.transitions.insert(last_transition.clone());
+
+            if group_closed {
+                for from in group_leaves {
+                    last_transition = (from.clone(), next_state.clone(), input);
+                    state_machine.transitions.insert(last_transition.clone());
+                }
+                group_leaves = Vec::new();
+            }
+            group_closed = false;
+
             state = next_state;
         }
         state_machine.final_states.push(state);
+        state_machine.final_states.append(&mut group_leaves);
 
         Ok(state_machine.to_dfa())
     }
@@ -335,5 +360,17 @@ mod tests {
 
         assert!(!state_machine.matches("ce"));
         assert!(!state_machine.matches("ah"));
+    }
+
+    #[test]
+    fn groups() {
+        let reg = "a(b|c)d";
+        let state_machine: StateMachine = reg.parse().unwrap();
+
+        assert!(state_machine.matches("abd"));
+        assert!(state_machine.matches("acd"));
+
+        assert!(!state_machine.matches("abcd"));
+        assert!(!state_machine.matches("ad"));
     }
 }
