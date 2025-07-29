@@ -187,6 +187,10 @@ impl StateMachine {
             dot += &format!("\"{from:?}\" -> \"{to:?}\" [ label=\"{input}\" ]\n");
         }
 
+        for state in &self.final_states {
+            dot += &format!("\"{state:?}\" [ shape=doublecircle ]\n");
+        }
+
         dot += "}";
 
         dot
