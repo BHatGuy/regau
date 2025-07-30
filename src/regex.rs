@@ -214,45 +214,48 @@ impl FromStr for StateMachine {
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         let mut state_machine = StateMachine::new();
-        let mut state = vec![0];
-        let mut last_transition = (vec![0], vec![0], Input::Any); // TODO: Option
-        let mut group_stack = vec![state.clone()];
-        let mut group_leaves = Vec::new();
-        let mut group_closed = false;
+        let mut states = vec![vec![0]];
+        let mut last_transitions = vec![];
+        let mut group_start_stack = vec![states.clone()];
+        let mut group_end_stack = vec![vec![]];
 
         for chr in s.chars() {
             if chr == '*' {
-                state_machine.transitions.remove(&last_transition);
+                states.clear();
+                for last_transition in &last_transitions {
+                    state_machine.transitions.remove(last_transition);
 
-                last_transition = (
-                    last_transition.0.clone(),
-                    last_transition.0,
-                    last_transition.2,
-                );
-                state_machine.transitions.insert(last_transition.clone());
-                state[0] -= 1;
+                    let new_transition = (
+                        last_transition.0.clone(),
+                        last_transition.0.clone(),
+                        last_transition.2,
+                    );
+                    state_machine.transitions.insert(new_transition.clone());
+                    states.push(last_transition.0.clone());
+                }
                 continue;
             }
 
             if chr == '(' {
-                group_stack.push(state.clone());
+                group_start_stack.push(states.clone());
+                group_end_stack.push(vec![]);
                 continue;
             }
 
             if chr == ')' {
-                group_closed = true;
-                group_stack.pop();
+                group_start_stack.pop();
+                states.append(&mut group_end_stack.pop().unwrap());
                 continue;
             }
 
             if chr == '|' {
-                group_closed = false;
-                group_leaves.push(state);
-                state = group_stack.last().unwrap().clone();
+                let index = group_end_stack.len() - 1;
+                group_end_stack[index].append(&mut states.clone());
+                states = group_start_stack.last().unwrap().clone();
                 continue;
             }
 
-            let mut next_state = state.clone();
+            let mut next_state = states[0].clone();
             next_state[0] += 1;
             while state_machine
                 .transitions
@@ -268,22 +271,20 @@ impl FromStr for StateMachine {
                 '.' => Input::Any,
                 c => Input::Literal(c),
             };
-            last_transition = (state, next_state.clone(), input);
-            state_machine.transitions.insert(last_transition.clone());
 
-            if group_closed {
-                for from in group_leaves {
-                    last_transition = (from.clone(), next_state.clone(), input);
-                    state_machine.transitions.insert(last_transition.clone());
-                }
-                group_leaves = Vec::new();
+            last_transitions.clear();
+            for from in states {
+                let new_transition = (from.clone(), next_state.clone(), input);
+                state_machine.transitions.insert(new_transition.clone());
+                last_transitions.push(new_transition);
             }
-            group_closed = false;
 
-            state = next_state;
+            states = vec![next_state];
         }
-        state_machine.final_states.push(state);
-        state_machine.final_states.append(&mut group_leaves);
+        state_machine.final_states.append(&mut states);
+        for mut ends in group_end_stack {
+            state_machine.final_states.append(&mut ends);
+        }
 
         Ok(state_machine.to_dfa())
     }
