@@ -1,4 +1,5 @@
 use std::{
+    any::Any,
     collections::{HashMap, HashSet},
     fmt::Display,
     str::FromStr,
@@ -218,20 +219,44 @@ impl FromStr for StateMachine {
         let mut last_transitions = vec![];
         let mut group_start_stack = vec![states.clone()];
         let mut group_end_stack = vec![vec![]];
+        let mut group_closed: Option<Vec<Vec<u64>>> = None;
 
         for chr in s.chars() {
             if chr == '*' {
-                states.clear();
-                for last_transition in &last_transitions {
-                    state_machine.transitions.remove(last_transition);
+                if let Some(group_start) = group_closed {
+                    // All transitions to group ends have to go to group start instead
+                    let transitions_to_end: Vec<(Vec<u64>, Vec<u64>, Input)> = state_machine
+                        .transitions
+                        .iter()
+                        .filter(|(_, to, _)| states.contains(to))
+                        .cloned()
+                        .collect();
 
-                    let new_transition = (
-                        last_transition.0.clone(),
-                        last_transition.0.clone(),
-                        last_transition.2,
-                    );
-                    state_machine.transitions.insert(new_transition.clone());
-                    states.push(last_transition.0.clone());
+                    for (from, to, input) in transitions_to_end {
+                        state_machine.transitions.remove(&(to, from.clone(), input));
+                        for start in &group_start {
+                            let new_transition = (from.clone(), start.clone(), input);
+                            state_machine.transitions.insert(new_transition);
+                        }
+                    }
+
+                    let mut group_start = group_start;
+                    states.append(&mut group_start);
+
+                    group_closed = None;
+                } else {
+                    states.clear();
+                    for last_transition in &last_transitions {
+                        state_machine.transitions.remove(last_transition);
+
+                        let new_transition = (
+                            last_transition.0.clone(),
+                            last_transition.0.clone(),
+                            last_transition.2,
+                        );
+                        state_machine.transitions.insert(new_transition.clone());
+                        states.push(last_transition.0.clone());
+                    }
                 }
                 continue;
             }
@@ -243,7 +268,7 @@ impl FromStr for StateMachine {
             }
 
             if chr == ')' {
-                group_start_stack.pop();
+                group_closed = Some(group_start_stack.pop().unwrap());
                 states.append(&mut group_end_stack.pop().unwrap());
                 continue;
             }
@@ -280,6 +305,7 @@ impl FromStr for StateMachine {
             }
 
             states = vec![next_state];
+            group_closed = None;
         }
         state_machine.final_states.append(&mut states);
         for mut ends in group_end_stack {
@@ -373,5 +399,19 @@ mod tests {
 
         assert!(!state_machine.matches("abcd"));
         assert!(!state_machine.matches("ad"));
+    }
+
+    #[test]
+    fn repeat_groups() {
+        let reg = "(ab)*(xx|yy)*";
+        let state_machine: StateMachine = reg.parse().unwrap();
+
+        assert!(state_machine.matches("ababxxyyxx"));
+        assert!(state_machine.matches("abxx"));
+        assert!(state_machine.matches("xx"));
+        assert!(state_machine.matches("ab"));
+
+        assert!(!state_machine.matches("ax"));
+        assert!(!state_machine.matches("axy"));
     }
 }
